@@ -5,41 +5,70 @@ on:
   repository_dispatch:
     types: [definition_update]
   workflow_dispatch:
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      deployments: write
-    name: Deploy to Cloudflare Pages
+    name: Build and deploy VIA
     steps:
       - name: Checkout app
         uses: actions/checkout@v4
+
       - uses: oven-sh/setup-bun@v2
+
       - name: Install app dependencies
         run: bun install
+
       - name: Checkout keyboard definitions
         uses: actions/checkout@v4
         with:
           repository: freather-keyspensory/via-keyboards
           ref: master
           path: via-keyboards-src
+
       - name: Install keyboard definition dependencies
         working-directory: via-keyboards-src
         run: bun install
+
       - name: Build keyboard definitions
         working-directory: via-keyboards-src
         run: bun run build
+
       - name: Copy keyboard definitions
         run: |
           rm -rf public/definitions
           cp -R via-keyboards-src/dist public/definitions
-      - name: Build
+
+      - name: Build VIA for /via/
         run: bun run build
-      - name: Deploy
-        uses: cloudflare/wrangler-action@v3
+
+      - name: Checkout website
+        uses: actions/checkout@v4
         with:
-          apiToken: ${{ secrets.CLOUDFLARE_ACCOUNT_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy dist --project-name=app
-          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+          repository: freather-keyspensory/freather-keyspensory.github.io
+          ref: main
+          token: ${{ secrets.SITE_DEPLOY_TOKEN }}
+          path: website
+
+      - name: Update website /via
+        run: |
+          rm -rf website/via
+          mkdir -p website/via
+          cp -R dist/. website/via/
+
+      - name: Publish website
+        working-directory: website
+        env:
+          GH_TOKEN: ${{ secrets.SITE_DEPLOY_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add via
+          if git diff --cached --quiet; then
+            echo "No VIA changes to publish."
+            exit 0
+          fi
+          git commit -m "Update VIA configurator"
+          git push origin main
