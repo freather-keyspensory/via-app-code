@@ -13,13 +13,27 @@ jobs:
       deployments: write
     name: Deploy to Cloudflare Pages
     steps:
-      - name: Checkout
+      - name: Checkout app
         uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
-      - name: Install
+      - name: Install app dependencies
         run: bun install
-      - name: Refresh Deps
-        run: bun run refresh-kbs
+      - name: Checkout keyboard definitions
+        uses: actions/checkout@v4
+        with:
+          repository: freather-keyspensory/via-keyboards
+          ref: master
+          path: via-keyboards-src
+      - name: Install keyboard definition dependencies
+        working-directory: via-keyboards-src
+        run: bun install
+      - name: Build keyboard definitions
+        working-directory: via-keyboards-src
+        run: bun run build
+      - name: Copy keyboard definitions
+        run: |
+          rm -rf public/definitions
+          cp -R via-keyboards-src/dist public/definitions
       - name: Build
         run: bun run build
       - name: Deploy
